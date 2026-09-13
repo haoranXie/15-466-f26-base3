@@ -1,12 +1,12 @@
 #include "Mode.hpp"
 
-#include "Scene.hpp"
 #include "Sound.hpp"
 
 #include <glm/glm.hpp>
 
+#include <memory>
+#include <string>
 #include <vector>
-#include <deque>
 
 struct PlayMode : Mode {
 	PlayMode();
@@ -19,33 +19,48 @@ struct PlayMode : Mode {
 
 	//----- game state -----
 
-	//input tracking:
-	struct Button {
-		uint8_t downs = 0;
-		uint8_t pressed = 0;
-	} left, right, down, up;
+	static constexpr int MaxSlots = 8;
 
-	//local copy of the game scene (so code can change it during gameplay):
-	Scene scene;
+	static constexpr float NoteSeconds = 0.22f;
+	static constexpr float ClearPause = 0.90f;
+	static constexpr float RunSeconds = 60.0f;
+	static constexpr float WrongPenalty = 5.0f;
 
-	//hexapod leg to wobble:
-	Scene::Transform *hip = nullptr;
-	Scene::Transform *upper_leg = nullptr;
-	Scene::Transform *lower_leg = nullptr;
-	glm::quat hip_base_rotation;
-	glm::quat upper_leg_base_rotation;
-	glm::quat lower_leg_base_rotation;
-	float wobble = 0.0f;
+	//the shape of the current loop; both move as the level goes up:
+	int slot_count = 4;
+	float beat_seconds = 0.40f;
 
-	glm::vec3 get_leg_tip_position();
+	//the ways a note can differ:
+	enum Axis { AxisPitch = 0, AxisVolume, AxisTimbre, AxisCount };
 
-	//music coming from the tip of the leg (as a demonstration):
-	std::shared_ptr< Sound::PlayingSample > leg_tip_loop;
+	struct Slot {
+		bool odd = false;
+		bool ruled_out = false; //already guessed during this loop
+		int sample = 0; //index into samples; 0 is the plain note
+	};
 
-	//car honk sound:
-	std::shared_ptr< Sound::PlayingSample > honk_oneshot;
-	
-	//camera:
-	Scene::Camera *camera = nullptr;
+	static int slots_for(int loops_cleared);
 
+	void start_run();
+	void new_loop();
+	void guess(int slot);
+
+	//samples for the current loop, kept alive while the mixer might read them:
+	std::vector< std::unique_ptr< Sound::Sample > > samples;
+	Slot slots[MaxSlots];
+
+	float time = 0.0f;
+	float next_beat = 0.0f;
+	int beat = 0;
+	float lit[MaxSlots] = {0.0f};
+	float flash[MaxSlots] = {0.0f};
+	bool flash_good[MaxSlots] = {false};
+
+	float clear_timer = 0.0f; //counts down between loops
+	std::string clear_banner; //what changed, shown while the loop is clean
+
+	float clock = RunSeconds;
+	int cleared = 0; //loops finished; the level shown is one past this
+	int best = 0;
+	bool game_over = false;
 };
